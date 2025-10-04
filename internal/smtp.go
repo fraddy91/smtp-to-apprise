@@ -5,10 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/mail"
 	"os"
+	"strings"
+	"time"
+
+	"github.com/fraddy91/smtp-to-apprise/logger"
 
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
@@ -29,7 +34,7 @@ func (s *Session) AuthMechanisms() []string {
 }
 
 func (s *Session) Auth(mech string) (sasl.Server, error) {
-	log.Printf("SMTP: client requested auth mechanism=%s", mech)
+	logger.Debugf("SMTP: client requested auth mechanism=%s", mech)
 	if mech != "PLAIN" {
 		return nil, smtp.ErrAuthUnsupported
 	}
@@ -50,9 +55,9 @@ func (s *Session) Rcpt(to string, opts *smtp.RcptOptions) error {
 }
 
 func (s *Session) Data(r io.Reader) error {
-	log.Printf("SMTP: data revceived, auth status is %t", s.authed)
+	logger.Debugf("SMTP: data received, auth status is %t", s.authed)
 	if !s.authed {
-		log.Printf("unauthorized attempt to send mail")
+		logger.Warnf("unauthorized attempt to send mail")
 		return smtp.ErrAuthRequired
 	}
 
@@ -61,41 +66,116 @@ func (s *Session) Data(r io.Reader) error {
 		return err
 	}
 
-	rec, err := s.bkd.GetRecord(s.to)
+	rec, err := s.bkd.GetRecords(s.to)
 	if err != nil {
-		log.Printf("No mapping for %s: %v", s.to, err)
+		logger.Errorf("No mapping for %s: %v", s.to, err)
 		return nil
 	}
 
-	return s.forwardToApprise(rec, msg)
+	s.forwardToApprise(rec, msg)
+	return nil
 }
 
-func (s *Session) forwardToApprise(rec *Record, raw []byte) error {
-	m, err := mail.ReadMessage(bytes.NewReader(raw))
-	var body []byte
-	if err == nil {
-		body, _ = io.ReadAll(m.Body)
-	} else {
-		body = raw
-	}
-
-	payload := map[string]string{
-		"title": m.Header.Get("Subject"),
-		"body":  string(body),
-		"tag":   rec.Tags,
-	}
-	data, _ := json.Marshal(payload)
-
-	url := fmt.Sprintf("%s/%s", s.bkd.AppriseURL, rec.Key)
-	resp, err := http.Post(url, "application/json", bytes.NewReader(data))
+func (s *Session) forwardToApprise(records []*Record, raw []byte) {
+	parts, m, err := extractParts(raw)
 	if err != nil {
-		log.Printf("Apprise error: %v", err)
-		return nil
+		logger.Errorf("Parse error: %v", err)
+		return
 	}
-	defer resp.Body.Close()
 
-	log.Printf("Forwarded message for %s to Apprise key %s", rec.Email, rec.Key)
-	return nil
+	for _, rec := range records {
+		body, ok := parts[rec.MimeType]
+		if !ok {
+			logger.Errorf("No %s part for %s/%s", rec.MimeType, rec.Email, rec.Key)
+			continue
+		}
+
+		format := "html"
+		if rec.MimeType == "text/plain" {
+			format = "text"
+		}
+		payload := map[string]string{
+			"title":  m.Header.Get("Subject"),
+			"body":   body,
+			"tag":    rec.Tags,
+			"format": format,
+		}
+		data, err := json.Marshal(payload)
+		if err != nil {
+			logger.Errorf("JSON marshal error: %v", err)
+			continue
+		}
+
+		url := fmt.Sprintf("%s/%s", s.bkd.AppriseURL, rec.Key)
+		s.bkd.Dispatcher.Enqueue(url, data, rec)
+	}
+}
+
+func postWithRetry(url string, data []byte, maxAttempts int) error {
+	var err error
+	backoff := time.Second
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		resp, e := http.Post(url, "application/json", bytes.NewReader(data))
+		if e == nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			resp.Body.Close()
+			return nil
+		}
+		if e != nil {
+			err = e
+		} else {
+			err = fmt.Errorf("apprise returned %s", resp.Status)
+			resp.Body.Close()
+		}
+		logger.Warnf("Apprise send failed (attempt %d/%d): %v", attempt, maxAttempts, err)
+		time.Sleep(backoff)
+		if backoff < 30*time.Second {
+			backoff *= 2
+		}
+	}
+	return fmt.Errorf("all retries failed: %w", err)
+}
+
+func extractParts(raw []byte) (map[string]string, *mail.Message, error) {
+	m, err := mail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	parts := make(map[string]string)
+	mediaType, params, err := mime.ParseMediaType(m.Header.Get("Content-Type"))
+	if err != nil {
+		// fallback: treat whole body as plain
+		body, _ := io.ReadAll(m.Body)
+		parts["text/plain"] = string(body)
+		return parts, m, nil
+	}
+
+	if strings.HasPrefix(mediaType, "multipart/") {
+		mr := multipart.NewReader(m.Body, params["boundary"])
+		for {
+			p, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				break
+			}
+			ctype := p.Header.Get("Content-Type")
+			b, _ := io.ReadAll(p)
+			if strings.HasPrefix(ctype, "text/plain") {
+				parts["text/plain"] = string(b)
+			} else if strings.HasPrefix(ctype, "text/html") {
+				parts["text/html"] = string(b)
+			}
+		}
+	} else {
+		body, _ := io.ReadAll(m.Body)
+		parts[mediaType] = string(body)
+	}
+
+	// Always keep raw
+	parts["multipart"] = string(raw)
+	return parts, m, nil
 }
 
 func (s *Session) Reset()        {}

@@ -1,46 +1,56 @@
 package internal
 
 import (
-	"database/sql"
 	"embed"
 	"html/template"
-	"log"
+	"net/http"
 
+	"github.com/fraddy91/smtp-to-apprise/logger"
 	"github.com/gin-gonic/gin"
 )
 
 type Record struct {
-	Email string `json:"email"`
-	Key   string `json:"key"`
-	Tags  string `json:"tags"`
+	Email    string `json:"email"`
+	Key      string `json:"key"`
+	Tags     string `json:"tags"`
+	MimeType string `json:"mime_type"`
+}
+
+type UpdatePayload struct {
+	Email    string `json:"email"`
+	MimeType string `json:"mime_type"`
+	Field    string `json:"field"`
+	Value    string `json:"value"`
 }
 
 //go:embed templates/*
 var templatesFS embed.FS
 
-func StartGUI(db *sql.DB, addr string) {
+//go:embed assets/favicon.ico
+var favicon []byte
+
+func StartGUI(be Backend, addr string) {
+	// Maybe should add setting for debug log level
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
+	// Would be nice to add trusted proxies settings r.SetTrustedProxies([]string{"127.0.0.1"})
 	tmpl, err := template.ParseFS(templatesFS, "templates/*")
 	if err != nil {
-		log.Fatalf("Failed to parse templates: %v", err)
+		logger.Errorf("Failed to parse templates: %v", err)
 	}
 	r.SetHTMLTemplate(tmpl)
 
+	// Serve favicon directly from embedded bytes
+	r.GET("/favicon.ico", func(c *gin.Context) {
+		c.Data(http.StatusOK, "image/x-icon", favicon)
+	})
+
 	r.GET("/", func(c *gin.Context) {
-		rows, err := db.Query("SELECT email, apprise_key, tags FROM records")
+		recs, err := be.GetAllRecords()
 		if err != nil {
 			c.String(500, "DB error: %v", err)
 			return
 		}
-		defer rows.Close()
-
-		var recs []Record
-		for rows.Next() {
-			var r Record
-			rows.Scan(&r.Email, &r.Key, &r.Tags)
-			recs = append(recs, r)
-		}
-
 		c.HTML(200, "index.html", gin.H{
 			"Records": recs,
 			"Success": c.Query("success") == "1",
@@ -49,10 +59,12 @@ func StartGUI(db *sql.DB, addr string) {
 	})
 
 	r.POST("/add", func(c *gin.Context) {
-		_, err := db.Exec(
-			"INSERT OR REPLACE INTO records (email, apprise_key, tags) VALUES (?, ?, ?)",
-			c.PostForm("email"), c.PostForm("key"), c.PostForm("tags"),
-		)
+		var rec Record
+		rec.Email = c.PostForm("email")
+		rec.Key = c.PostForm("key")
+		rec.Tags = c.PostForm("tags")
+		rec.MimeType = c.PostForm("mime_type")
+		err := be.AddRecord(&rec)
 		if err != nil {
 			c.Redirect(302, "/?error=DB+insert+failed")
 			return
@@ -60,11 +72,28 @@ func StartGUI(db *sql.DB, addr string) {
 		c.Redirect(302, "/?success=1")
 	})
 
+	r.POST("/update", func(c *gin.Context) {
+		var p UpdatePayload
+		if err := c.BindJSON(&p); err != nil {
+			c.Status(http.StatusBadRequest)
+			return
+		}
+
+		be.UpdateRecord(p.Field, p.Value, p.Email, p.MimeType)
+		if err != nil {
+			logger.Errorf("Update error: %v", err)
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		c.Status(http.StatusOK)
+	})
+
 	r.POST("/delete", func(c *gin.Context) {
-		_, err := db.Exec(
-			"DELETE FROM records WHERE email = ? AND apprise_key = ?",
-			c.PostForm("email"), c.PostForm("key"),
-		)
+		var rec Record
+		rec.Email = c.PostForm("email")
+		rec.Key = c.PostForm("key")
+		rec.MimeType = c.PostForm("mime_type")
+		err := be.DeleteRecord(&rec)
 		if err != nil {
 			c.Redirect(302, "/?error=Delete+failed")
 			return
@@ -72,6 +101,8 @@ func StartGUI(db *sql.DB, addr string) {
 		c.Redirect(302, "/?success=1")
 	})
 
-	log.Printf("Admin GUI listening on %s", addr)
-	log.Fatal(r.Run(addr))
+	logger.Infof("Admin GUI listening on %s", addr)
+	if err := r.Run(addr); err != nil {
+		logger.Errorf("Failed to run server: %v", err)
+	}
 }

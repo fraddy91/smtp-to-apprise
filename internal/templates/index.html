@@ -6,11 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet"
         href="https://unpkg.com/@picocss/pico@latest/css/pico.slate.min.css">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <style>
     .copy-btn { font-size: 0.8em; margin-left: 0.5em; cursor: pointer; }
-    .flash { padding: 0.5em; margin-bottom: 1em; border-radius: 4px; }
-    .flash.success { background: #d4edda; color: #155724; }
-    .flash.error { background: #f8d7da; color: #721c24; }
     #searchBox { margin-bottom: 1em; }
     .header-bar {
       display: flex;
@@ -47,6 +45,64 @@
       opacity: 0.6;
       transition: opacity 0.2s ease;
     }
+    /* Light theme */
+    html[data-theme="light"] td[contenteditable="true"] {
+      background-color: #f9f9f9;
+      color: #222;
+    }
+    html[data-theme="light"] td[contenteditable="true"]:hover {
+      outline: 1px dashed #aaa;
+      background-color: #fff;
+    }
+    html[data-theme="light"] td[contenteditable="true"]:focus {
+      outline: 2px solid #0078d7;
+      background-color: #eef6ff;
+    }
+
+    /* Dark theme */
+    html[data-theme="dark"] td[contenteditable="true"] {
+      background-color: #1e1e1e;
+      color: #ddd;
+    }
+    html[data-theme="dark"] td[contenteditable="true"]:hover {
+      outline: 1px dashed #666;
+      background-color: #2a2a2a;
+    }
+    html[data-theme="dark"] td[contenteditable="true"]:focus {
+      outline: 2px solid #4da3ff;
+      background-color: #252f3f;
+    }
+    /* Sorting */
+    th.sorted-asc::after {
+      content: " ▲";
+      font-size: 0.8em;
+    }
+    th.sorted-desc::after {
+      content: " ▼";
+      font-size: 0.8em;
+    }
+    /* Toast notifications */
+    td.saved {
+      background-color: #1e3d1e !important; /* dark green */
+      transition: background-color 1s ease;
+    }
+    td.error {
+      background-color: #3d1e1e !important; /* dark red */
+      transition: background-color 1s ease;
+    }
+    .toast {
+      background: #333;
+      color: #fff;
+      padding: 0.5em 1em;
+      margin-top: 0.5em;
+      border-radius: 4px;
+      opacity: 0.9;
+      animation: fadein 0.3s, fadeout 0.3s 2.7s;
+    }
+    @keyframes fadein { from {opacity:0;} to {opacity:0.9;} }
+    @keyframes fadeout { from {opacity:0.9;} to {opacity:0;} }
+    .toast.success { background: #28a745; }
+    .toast.error { background: #dc3545; }
   </style>
 </head>
 <body>
@@ -60,9 +116,8 @@
       </button>
     </div>
 
-    <!-- Flash messages -->
-    {{if .Success}}<div class="flash success">✅ Record saved!</div>{{end}}
-    {{if .Error}}<div class="flash error">❌ {{.Error}}</div>{{end}}
+    <!-- Toast container for JS notifications -->
+    <div id="toast-container" style="position:fixed;top:1em;right:1em;z-index:9999;"></div>
 
     <!-- Search box -->
     <input type="text" id="searchBox" placeholder="Search records…">
@@ -72,10 +127,11 @@
       <table role="grid">
         <thead>
           <tr>
-            <th>Email</th>
-            <th>Key</th>
-            <th>Tags</th>
-            <th>Action</th>
+            <th onclick="sortTable(0)">Email</th>
+            <th onclick="sortTable(1)">Key</th>
+            <th onclick="sortTable(2)">Tags</th>
+            <th onclick="sortTable(3)">MIME Type</th>
+            <th onclick="sortTable(4)">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -85,18 +141,24 @@
               {{.Email}}
               <button class="copy-btn" onclick="copy('{{.Email}}')">📋</button>
             </td>
-            <td>
-              {{.Key}}
-              <button class="copy-btn" onclick="copy('{{.Key}}')">📋</button>
+            <td contenteditable="true" 
+                title="Click to edit"
+                onblur="updateRecord('{{.Email}}','{{.MimeType}}', this, 'apprise_key')">
+              {{.Key}} 
             </td>
-            <td>
+            <td contenteditable="true" 
+                title="Click to edit"
+                onblur="updateRecord('{{.Email}}','{{.MimeType}}', this, 'tags')">
               {{.Tags}}
-              <button class="copy-btn" onclick="copy('{{.Tags}}')">📋</button>
             </td>
             <td>
-              <form method="POST" action="/delete" style="display:inline">
+              {{.MimeType}}
+            </td>
+            <td>
+              <form method="POST" action="/delete" onsubmit="return handleDelete(this)" style="display:inline">
                 <input type="hidden" name="email" value="{{.Email}}">
                 <input type="hidden" name="key" value="{{.Key}}">
+                <input type="hidden" name="mime_type" value="{{.MimeType}}">
                 <button type="submit" class="contrast">🗑️</button>
               </form>
             </td>
@@ -118,6 +180,13 @@
       <label>Tags
         <input type="text" name="tags">
       </label>
+      <label>MIME Type
+        <select name="mime_type" required>
+          <option value="text/plain">Plain text</option>
+          <option value="text/html">HTML</option>
+          <option value="multipart">Whole message (raw MIME)</option>
+        </select>
+      </label>
       <button type="submit">💾 Save</button>
     </form>
   </main>
@@ -136,22 +205,84 @@
       sunIcon.style.display = !isDark ? "inline" : "none";
       moonIcon.style.display = !isDark ? "none" : "inline";
     });
-    if (localStorage.getItem("theme") === "dark") {
-      document.documentElement.setAttribute("data-theme", "dark");
-    }
-    else{
-      document.documentElement.setAttribute("data-theme", "light");
-    }
+
+    // On load, set theme icon
       window.addEventListener("DOMContentLoaded", () => {
       const isDark = html.getAttribute("data-theme") === "dark";
       sunIcon.style.display = isDark ? "inline" : "none";
       moonIcon.style.display = isDark ? "none" : "inline";
     });
-    
-    // Auto-hide flash messages after 5s
-    setTimeout(() => {
-      document.querySelectorAll(".flash").forEach(el => el.remove());
-    }, 5000);
+
+    // Set system theme or localStorage theme
+    if (!localStorage.getItem("theme")) {
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.setAttribute("data-theme", prefersDark ? "dark" : "light");
+    }
+    else{
+      if (localStorage.getItem("theme") === "dark") {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+      else{
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    }
+
+    // Update inline editable cells
+    function updateRecord(email, mimeType, cell, field) {
+      const newValue = cell.innerText.trim();
+      fetch('/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, mime_type: mimeType, field, value: newValue })
+      }).then(r => {
+        if (r.ok) {  showToast("Record updated", "success");
+        } else {
+          showToast("Update failed", "error");
+        }
+      });
+    }
+
+    //Keyboard shortcuts
+    document.addEventListener("keydown", e => {
+      const cell = document.activeElement;
+      if (cell && cell.hasAttribute("contenteditable")) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          cell.blur(); // triggers updateRecord
+          const nextRow = cell.parentElement.nextElementSibling;
+          if (nextRow) {
+            const sameCol = cell.cellIndex;
+            const nextCell = nextRow.cells[sameCol];
+            if (nextCell && nextCell.hasAttribute("contenteditable")) {
+              nextCell.focus();
+            }
+          }
+        }
+        if (e.key === "Escape") {
+          document.execCommand("undo"); // revert last change
+          cell.blur();
+        }
+      }
+    });
+
+    // Sort table
+    function sortTable(colIndex) {
+      const tbody = document.querySelector("tbody");
+      const rows = Array.from(tbody.querySelectorAll("tr"));
+      const asc = tbody.getAttribute("data-sort-col") != colIndex || tbody.getAttribute("data-sort-dir") === "desc";
+      rows.sort((a, b) => {
+        const A = a.cells[colIndex].innerText.toLowerCase();
+        const B = b.cells[colIndex].innerText.toLowerCase();
+        return asc ? A.localeCompare(B) : B.localeCompare(A);
+      });
+      rows.forEach(r => tbody.appendChild(r));
+      // update state
+      tbody.setAttribute("data-sort-col", colIndex);
+      tbody.setAttribute("data-sort-dir", asc ? "asc" : "desc");
+      // clear old indicators
+      document.querySelectorAll("th").forEach(th => th.classList.remove("sorted-asc","sorted-desc"));
+      document.querySelectorAll("thead th")[colIndex].classList.add(asc ? "sorted-asc" : "sorted-desc");
+    }
 
     // Copy to clipboard
     function copy(text) {
@@ -166,6 +297,41 @@
         tr.style.display = tr.innerText.toLowerCase().includes(term) ? "" : "none";
       });
     });
+
+    // Notification toasts
+    function showToast(msg, type="info") {
+      const toast = document.createElement("div");
+      toast.textContent = msg;
+      toast.className = "toast " + type;
+      document.getElementById("toast-container").appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+    //
+
+    // Trigger server‑side messages after DOM + function exist
+    window.addEventListener("DOMContentLoaded", () => {
+      // Comments to trick linter
+      /* {{if .Success }} */ showToast("✅ Record saved!", "success"); /* {{end}} */
+      /* {{if .Error}} */ showToast("❌ {{.Error}}", "error"); /* {{end}} */
+    });
+
+    // Delete
+    function handleDelete(form) {
+      if (confirm("Are you sure you want to delete this record?")) {
+        fetch(form.action, {
+          method: "POST",
+          body: new FormData(form)
+        }).then(r => {
+          if (r.ok) {
+            showToast("Record deleted", "success");
+            form.closest("tr").remove();
+          } else {
+            showToast("Delete failed", "error");
+          }
+        });
+      }
+      return false;
+    }
   </script>
 </body>
 </html>

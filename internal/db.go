@@ -2,39 +2,91 @@ package internal
 
 import (
 	"database/sql"
-	"log"
+
+	"github.com/fraddy91/smtp-to-apprise/logger"
 )
 
-type Backend struct {
-	Db         *sql.DB
-	AppriseURL string
-}
-
 func InitDB(path string) *sql.DB {
+	logger.Infof("Database path: %s", path)
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
-		log.Fatalf("DB open error: %v", err)
+		logger.Errorf("DB open error: %v", err)
 	}
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS records (
-			email TEXT PRIMARY KEY,
-			apprise_key TEXT NOT NULL,
-			tags TEXT
+		email TEXT NOT NULL,
+		apprise_key TEXT NOT NULL,
+		tags TEXT NOT NULL,
+		mime_type TEXT NOT NULL,
+		PRIMARY KEY (email, apprise_key, mime_type)
 		);`)
 	if err != nil {
-		log.Fatalf("DB schema error: %v", err)
+		logger.Errorf("DB schema error: %v", err)
 	}
+
 	return db
 }
 
-func (b *Backend) GetRecord(email string) (*Record, error) {
-	var rec Record
-	err := b.Db.QueryRow(
-		"SELECT email, apprise_key, tags FROM records WHERE email = ?",
+func (b *Backend) GetRecords(email string) ([]*Record, error) {
+	rows, err := b.Db.Query(
+		"SELECT email, apprise_key, tags, mime_type FROM records WHERE email = ?",
 		email,
-	).Scan(&rec.Email, &rec.Key, &rec.Tags)
+	)
 	if err != nil {
 		return nil, err
 	}
-	return &rec, nil
+	defer rows.Close()
+
+	var records []*Record
+	for rows.Next() {
+		var rec Record
+		if err := rows.Scan(&rec.Email, &rec.Key, &rec.Tags, &rec.MimeType); err != nil {
+			return nil, err
+		}
+		records = append(records, &rec)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return records, nil
+}
+
+func (b *Backend) GetAllRecords() ([]Record, error) {
+	rows, err := b.Db.Query("SELECT email, apprise_key, tags, mime_type FROM records ORDER BY email")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var recs []Record
+	for rows.Next() {
+		var r Record
+		rows.Scan(&r.Email, &r.Key, &r.Tags, &r.MimeType)
+		recs = append(recs, r)
+	}
+	return recs, nil
+}
+
+func (b *Backend) AddRecord(record *Record) error {
+	_, err := b.Db.Exec(
+		"INSERT OR REPLACE INTO records (email, apprise_key, tags, mime_type) VALUES (?, ?, ?, ?)",
+		record.Email, record.Key, record.Tags, record.MimeType,
+	)
+	return err
+}
+
+func (b *Backend) UpdateRecord(field, value, email, mimeType string) error {
+	query := "UPDATE records SET " + field + "=? WHERE email=? AND mime_type=?"
+	_, err := b.Db.Exec(query, value, email, mimeType)
+	return err
+}
+
+func (b *Backend) DeleteRecord(record *Record) error {
+	_, err := b.Db.Exec(
+		"DELETE FROM records WHERE email = ? AND apprise_key = ? and mime_type = ?",
+		record.Email, record.Key, record.MimeType,
+	)
+	return err
 }
