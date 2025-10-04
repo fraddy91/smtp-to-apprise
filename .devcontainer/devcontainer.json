@@ -1,0 +1,17 @@
+{
+  "name": "Go SMTP-to-Apprise proxy app",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "shim",
+  "workspaceFolder": "/app",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "go.toolsManagement.autoUpdate": true
+      }
+    },
+    "extensions": [
+      "golang.Go",
+      "ms-azuretools.vscode-docker"
+    ]
+  }
+}

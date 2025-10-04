@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>SMTP → Apprise Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet"
+        href="https://unpkg.com/@picocss/pico@latest/css/pico.slate.min.css">
+  <style>
+    .copy-btn { font-size: 0.8em; margin-left: 0.5em; cursor: pointer; }
+    .flash { padding: 0.5em; margin-bottom: 1em; border-radius: 4px; }
+    .flash.success { background: #d4edda; color: #155724; }
+    .flash.error { background: #f8d7da; color: #721c24; }
+    #searchBox { margin-bottom: 1em; }
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1em;
+    }
+
+    #moon-icon path {
+      fill: black;
+    }
+    #sun-icon path {
+      fill: white;
+    }
+    #themeToggle {
+      padding: 0.4em 0.6em;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.5em;
+      line-height: 1;
+      padding: 0;
+      outline: none;
+    }
+    #themeToggle:focus {
+      outline: none;
+      box-shadow: none;
+    }
+    #themeToggle svg {
+      width: 26px;
+      height: 26px;
+    }
+    #themeToggle:hover svg {
+      opacity: 0.6;
+      transition: opacity 0.2s ease;
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <div class="header-bar">
+      <h1>📬 SMTP → Apprise Config</h1>
+      <!-- <button id="themeToggle" aria-label="Toggle theme">🌓</button> -->
+      <button id="themeToggle">
+        <svg id="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 122.56 122.88"><defs><style>.cls-1{fill-rule:evenodd;}</style></defs><path class="cls-1" d="M121.85,87.3A64.31,64.31,0,1,1,36.88.4c2.94-1.37,5.92.91,4.47,4.47a56.29,56.29,0,0,0,75.75,77.4l.49-.27a3.41,3.41,0,0,1,4.61,4.61l-.35.69ZM92.46,74.67H92A16.11,16.11,0,0,0,76.2,58.93v-.52a15.08,15.08,0,0,0,11-4.72,15.19,15.19,0,0,0,4.72-11h.51a15.12,15.12,0,0,0,4.72,11,15.12,15.12,0,0,0,11,4.72v.51A16.13,16.13,0,0,0,92.46,74.67Zm10.09-46.59h-.27a7.94,7.94,0,0,0-2.49-5.81A7.94,7.94,0,0,0,94,19.78v-.27A7.94,7.94,0,0,0,99.79,17a8,8,0,0,0,2.49-5.8h.27A8,8,0,0,0,105,17a8,8,0,0,0,5.81,2.49v.27A8,8,0,0,0,105,22.27a7.94,7.94,0,0,0-2.49,5.81Zm-41.5,8h-.41a12.06,12.06,0,0,0-3.78-8.82A12.06,12.06,0,0,0,48,23.5v-.41a12.07,12.07,0,0,0,8.82-3.78,12.09,12.09,0,0,0,3.78-8.82h.41a12.08,12.08,0,0,0,3.77,8.82,12.09,12.09,0,0,0,8.83,3.78v.41a12.09,12.09,0,0,0-8.83,3.78,12.08,12.08,0,0,0-3.77,8.82Z"/></svg>
+        <svg id="sun-icon" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 122.88 70.41" style="enable-background:new 0 0 122.88 70.41" xml:space="preserve"><g><path d="M60.91,19.12c6.95,0,13.24,2.95,17.8,7.72c4.55,4.77,7.37,11.37,7.37,18.64c0,1.94-0.2,3.83-0.58,5.65h31.61 c2.1,0,2.62,1.16,2.62,2.59c0,1.43-0.52,2.59-2.62,2.59H7.09c-2.1,0-2.62-1.16-2.62-2.59c0-1.43,0.52-2.59,2.62-2.59h29.23 c-0.38-1.82-0.58-3.71-0.58-5.65c0-7.28,2.82-13.87,7.37-18.64C47.67,22.08,53.96,19.12,60.91,19.12L60.91,19.12L60.91,19.12z M63.4,70.41c-2.1,0-2.62-1.16-2.62-2.59s0.52-2.59,2.62-2.59h56.86c2.1,0,2.62,1.16,2.62,2.59s-0.52,2.59-2.62,2.59H63.4 L63.4,70.41z M2.62,70.41c-2.1,0-2.62-1.16-2.62-2.59s0.52-2.59,2.62-2.59h29.51c2.1,0,2.62,1.16,2.62,2.59s-0.52,2.59-2.62,2.59 H2.62L2.62,70.41z M38.39,9.46c-0.78-1.35-0.32-3.07,1.03-3.85c1.35-0.78,3.07-0.32,3.85,1.03l3.62,6.27 c0.78,1.35,0.32,3.07-1.03,3.85c-1.35,0.78-3.07,0.32-3.85-1.03L38.39,9.46L38.39,9.46L38.39,9.46z M58.67,2.83 c0-1.56,1.27-2.83,2.83-2.83c1.56,0,2.83,1.27,2.83,2.83v7.24c0,1.56-1.27,2.83-2.83,2.83c-1.56,0-2.83-1.26-2.83-2.83V2.83 L58.67,2.83L58.67,2.83z M79.56,7.23c0.77-1.35,2.49-1.81,3.84-1.04c1.35,0.77,1.81,2.49,1.04,3.84l-3.62,6.27 c-0.77,1.35-2.49,1.81-3.84,1.04c-1.35-0.77-1.81-2.49-1.04-3.84L79.56,7.23L79.56,7.23L79.56,7.23z M95.45,21.48 c1.35-0.78,3.07-0.32,3.85,1.03c0.78,1.35,0.32,3.07-1.03,3.85L92,29.98c-1.35,0.78-3.07,0.32-3.85-1.03 c-0.78-1.35-0.32-3.07,1.03-3.85L95.45,21.48L95.45,21.48L95.45,21.48z M102.08,41.76c1.56,0,2.83,1.27,2.83,2.83 c0,1.56-1.27,2.83-2.83,2.83h-7.24c-1.56,0-2.83-1.26-2.83-2.83s1.26-2.83,2.83-2.83H102.08L102.08,41.76L102.08,41.76z M19.74,46.25c-1.56,0-2.83-1.27-2.83-2.83c0-1.56,1.27-2.83,2.83-2.83h7.24c1.56,0,2.83,1.26,2.83,2.83s-1.27,2.83-2.83,2.83 H19.74L19.74,46.25L19.74,46.25z M24.14,25.35c-1.35-0.77-1.81-2.49-1.04-3.84c0.77-1.35,2.49-1.81,3.84-1.04l6.27,3.62 c1.35,0.77,1.81,2.49,1.04,3.84c-0.77,1.35-2.49,1.81-3.84,1.04L24.14,25.35L24.14,25.35L24.14,25.35z"/></g></svg>
+      </button>
+    </div>
+
+    <!-- Flash messages -->
+    {{if .Success}}<div class="flash success">✅ Record saved!</div>{{end}}
+    {{if .Error}}<div class="flash error">❌ {{.Error}}</div>{{end}}
+
+    <!-- Search box -->
+    <input type="text" id="searchBox" placeholder="Search records…">
+
+    <!-- Table -->
+    <div style="overflow-x:auto;">
+      <table role="grid">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Key</th>
+            <th>Tags</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Records}}
+          <tr>
+            <td>
+              {{.Email}}
+              <button class="copy-btn" onclick="copy('{{.Email}}')">📋</button>
+            </td>
+            <td>
+              {{.Key}}
+              <button class="copy-btn" onclick="copy('{{.Key}}')">📋</button>
+            </td>
+            <td>
+              {{.Tags}}
+              <button class="copy-btn" onclick="copy('{{.Tags}}')">📋</button>
+            </td>
+            <td>
+              <form method="POST" action="/delete" style="display:inline">
+                <input type="hidden" name="email" value="{{.Email}}">
+                <input type="hidden" name="key" value="{{.Key}}">
+                <button type="submit" class="contrast">🗑️</button>
+              </form>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Form to add records -->
+    <h2>Add / Update Record</h2>
+    <form method="POST" action="/add" autocomplete="off">
+      <label>Email
+        <input type="email" name="email" required>
+      </label>
+      <label>Key
+        <input type="text" name="key" required autocomplete="on">
+      </label>
+      <label>Tags
+        <input type="text" name="tags">
+      </label>
+      <button type="submit">💾 Save</button>
+    </form>
+  </main>
+
+  <script>
+    // Theme switching seems to work as html attribute now
+    const themeBtn = document.getElementById("themeToggle");
+    const html = document.documentElement;
+    const moonIcon = document.getElementById("moon-icon");
+    const sunIcon = document.getElementById("sun-icon");
+
+    themeBtn.addEventListener("click", () => {
+      const isDark = html.getAttribute("data-theme") === "dark";
+      html.setAttribute("data-theme", isDark ? "light" : "dark");
+      localStorage.setItem("theme", isDark ? "light" : "dark");
+      sunIcon.style.display = !isDark ? "inline" : "none";
+      moonIcon.style.display = !isDark ? "none" : "inline";
+    });
+    if (localStorage.getItem("theme") === "dark") {
+      document.documentElement.setAttribute("data-theme", "dark");
+    }
+    else{
+      document.documentElement.setAttribute("data-theme", "light");
+    }
+      window.addEventListener("DOMContentLoaded", () => {
+      const isDark = html.getAttribute("data-theme") === "dark";
+      sunIcon.style.display = isDark ? "inline" : "none";
+      moonIcon.style.display = isDark ? "none" : "inline";
+    });
+    
+    // Auto-hide flash messages after 5s
+    setTimeout(() => {
+      document.querySelectorAll(".flash").forEach(el => el.remove());
+    }, 5000);
+
+    // Copy to clipboard
+    function copy(text) {
+      navigator.clipboard.writeText(text);
+    }
+
+    // Search filter
+    const box = document.getElementById("searchBox");
+    box.addEventListener("input", () => {
+      const term = box.value.toLowerCase();
+      document.querySelectorAll("tbody tr").forEach(tr => {
+        tr.style.display = tr.innerText.toLowerCase().includes(term) ? "" : "none";
+      });
+    });
+  </script>
+</body>
+</html>

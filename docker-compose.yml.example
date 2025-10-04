@@ -1,0 +1,21 @@
+services:
+  smtp-proxy:
+    build: .
+    ports:
+      - "25:25"
+      - "8231:8080"
+    environment:
+      - GUI_ENABLED=true
+      - LISTEN_SMTP=25
+      - LISTEN_HTTP=8080
+      - STORE_FILE=records.db
+      - APPRISE_URL=http://apprise:8000/notify
+    volumes:
+      - ./data:/app
+    depends_on:
+      - apprise
+
+  apprise:
+    image: caronc/apprise
+    ports:
+      - "8000:8000"

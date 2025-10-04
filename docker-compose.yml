@@ -1,0 +1,16 @@
+services:
+  shim:
+    build: .
+    ports:
+      - "25:25"
+      - "8231:8080"
+    environment:
+      - GUI_ENABLED=true
+      - LISTEN_SMTP=25
+      - LISTEN_HTTP=8080
+      - STORE_FILE=records.db
+      - APPRISE_URL=http://apprise:8000/notify
+      - ADMIN_USER=admin
+      - ADMIN_PASS=supersecret
+    volumes:
+      - ./data:/app/data
