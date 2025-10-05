@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
+	"syscall"
 
 	"github.com/emersion/go-smtp"
 	"github.com/fraddy91/smtp-to-apprise/internal"
@@ -13,34 +16,33 @@ import (
 
 func main() {
 	logger.Infof("Starting smtp-to-apprise")
-	//Get the cur file dir
-	path, err := filepath.Abs("./") //
+
+	// Prepare data directory
+	dataDir, err := ensureDataDir("data", "0775")
 	if err != nil {
-		logger.Errorf("error msg", err)
+		logger.Errorf("Failed to prepare data directory: %v", err)
 	}
 
-	// DB init
-	outPath := filepath.Join(path, "data")
-	if _, err = os.Stat(outPath); os.IsNotExist(err) {
-		var dirMod uint64
-		if dirMod, err = strconv.ParseUint("0775", 8, 32); err == nil {
-			err = os.Mkdir(outPath, os.FileMode(dirMod))
-		}
-	}
-	if err != nil && !os.IsExist(err) {
-		logger.Errorf("error msg", err)
-	}
+	// Load config + init DB
 	cfg := internal.LoadConfig()
-	db := internal.InitDB("data/" + cfg.StoreFile)
+	db := internal.InitDB(filepath.Join(dataDir, cfg.StoreFile))
 
-	// Start SMTP
-	logger.Infof("Using Apprise backend: %s", cfg.AppriseURL)
-	be := &internal.Backend{Db: db, AppriseURL: cfg.AppriseURL, Dispatcher: internal.NewDispatcher(50)}
+	// Backend with dispatcher
+	dispatcherSize := 50
+	be := &internal.Backend{
+		Db:         db,
+		AppriseURL: cfg.AppriseURL,
+		Dispatcher: internal.NewDispatcher(dispatcherSize),
+	}
+
+	// Start SMTP server
 	s := smtp.NewServer(be)
 	s.Addr = ":" + cfg.ListenSMTP
 	s.Domain = "localhost"
 	s.AllowInsecureAuth = true
+
 	go func() {
+		logger.Infof("SMTP server listening on %s", s.Addr)
 		if err := s.ListenAndServe(); err != nil {
 			logger.Errorf("SMTP server error: %v", err)
 		}
@@ -48,9 +50,45 @@ func main() {
 
 	// Start GUI if enabled
 	if cfg.GuiEnabled {
-		go internal.StartGUI(*be, ":"+cfg.ListenHTTP)
+		go func() {
+			addr := ":" + cfg.ListenHTTP
+			logger.Infof("Starting GUI on %s", addr)
+			internal.StartGUI(*be, addr)
+		}()
 	}
 
-	// Block forever
-	select {}
+	// Graceful shutdown
+	waitForShutdown(be)
+}
+
+// ensureDataDir creates the data directory if missing.
+func ensureDataDir(name, perm string) (string, error) {
+	path, err := filepath.Abs("./")
+	if err != nil {
+		return "", err
+	}
+	outPath := filepath.Join(path, name)
+	if _, err = os.Stat(outPath); os.IsNotExist(err) {
+		if dirMod, perr := strconv.ParseUint(perm, 8, 32); perr == nil {
+			if err = os.Mkdir(outPath, os.FileMode(dirMod)); err != nil {
+				return "", err
+			}
+		}
+	}
+	return outPath, nil
+}
+
+// waitForShutdown blocks until SIGINT/SIGTERM and then drains dispatcher.
+func waitForShutdown(be *internal.Backend) {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	<-ctx.Done()
+	logger.Infof("Shutting down...")
+
+	be.Db.Close()
+
+	be.Dispatcher.Close()
+
+	logger.Infof("Shutdown complete")
 }

@@ -30,10 +30,10 @@ var templatesFS embed.FS
 var favicon []byte
 
 func StartGUI(be Backend, addr string) {
-	// Maybe should add setting for debug log level
+	// TODO: Add setting for debug log level
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
-	// Would be nice to add trusted proxies settings r.SetTrustedProxies([]string{"127.0.0.1"})
+	// TODO: Add trusted proxies settings, e.g. r.SetTrustedProxies([]string{"127.0.0.1"})
 	tmpl, err := template.ParseFS(templatesFS, "templates/*")
 	if err != nil {
 		logger.Errorf("Failed to parse templates: %v", err)
@@ -79,7 +79,7 @@ func StartGUI(be Backend, addr string) {
 			return
 		}
 
-		be.UpdateRecord(p.Field, p.Value, p.Email, p.MimeType)
+		err := be.UpdateRecord(p.Field, p.Value, p.Email, p.MimeType)
 		if err != nil {
 			logger.Errorf("Update error: %v", err)
 			c.Status(http.StatusInternalServerError)

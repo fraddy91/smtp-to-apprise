@@ -2,6 +2,7 @@ package internal
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/fraddy91/smtp-to-apprise/logger"
 )
@@ -11,6 +12,7 @@ func InitDB(path string) *sql.DB {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		logger.Errorf("DB open error: %v", err)
+		return nil
 	}
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS records (
@@ -22,6 +24,7 @@ func InitDB(path string) *sql.DB {
 		);`)
 	if err != nil {
 		logger.Errorf("DB schema error: %v", err)
+		return nil
 	}
 
 	return db
@@ -59,11 +62,12 @@ func (b *Backend) GetAllRecords() ([]Record, error) {
 		return nil, err
 	}
 	defer rows.Close()
-
 	var recs []Record
 	for rows.Next() {
 		var r Record
-		rows.Scan(&r.Email, &r.Key, &r.Tags, &r.MimeType)
+		if err := rows.Scan(&r.Email, &r.Key, &r.Tags, &r.MimeType); err != nil {
+			return nil, err
+		}
 		recs = append(recs, r)
 	}
 	return recs, nil
@@ -78,6 +82,14 @@ func (b *Backend) AddRecord(record *Record) error {
 }
 
 func (b *Backend) UpdateRecord(field, value, email, mimeType string) error {
+	allowedFields := map[string]bool{
+		"apprise_key": true,
+		"tags":        true,
+		"mime_type":   true,
+	}
+	if !allowedFields[field] {
+		return fmt.Errorf("invalid field name: %s", field)
+	}
 	query := "UPDATE records SET " + field + "=? WHERE email=? AND mime_type=?"
 	_, err := b.Db.Exec(query, value, email, mimeType)
 	return err

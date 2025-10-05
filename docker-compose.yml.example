@@ -1,9 +1,8 @@
 services:
   smtp-proxy:
-    build: .
+    image: fraddy/smtp-to-apprise
     ports:
-      - "25:25"
-      - "8231:8080"
+      - "8231:8080" # GUI
     environment:
       - GUI_ENABLED=true
       - LISTEN_SMTP=25
@@ -11,10 +10,15 @@ services:
       - STORE_FILE=records.db
       - APPRISE_URL=http://apprise:8000/notify
     volumes:
-      - ./data:/app
+      - ./data:/app/data/
     depends_on:
       - apprise
 
+#EITHER in the same network
+    network:
+      - shim_network # Should share it with Apprise and Authelia
+
+# OR in the same compose
   apprise:
     image: caronc/apprise
     ports:

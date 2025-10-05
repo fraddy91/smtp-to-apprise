@@ -69,24 +69,29 @@ func (s *Session) Data(r io.Reader) error {
 	rec, err := s.bkd.GetRecords(s.to)
 	if err != nil {
 		logger.Errorf("No mapping for %s: %v", s.to, err)
-		return nil
+		return fmt.Errorf("no mapping for recipient %s: %w", s.to, err)
 	}
 
-	s.forwardToApprise(rec, msg)
+	if err := s.forwardToApprise(rec, msg); err != nil {
+		logger.Errorf("forwardToApprise error: %v", err)
+		return err
+	}
 	return nil
 }
 
-func (s *Session) forwardToApprise(records []*Record, raw []byte) {
+func (s *Session) forwardToApprise(records []*Record, raw []byte) error {
 	parts, m, err := extractParts(raw)
 	if err != nil {
 		logger.Errorf("Parse error: %v", err)
-		return
+		return err
 	}
 
+	var lastErr error
 	for _, rec := range records {
 		body, ok := parts[rec.MimeType]
 		if !ok {
 			logger.Errorf("No %s part for %s/%s", rec.MimeType, rec.Email, rec.Key)
+			lastErr = fmt.Errorf("missing part for %s", rec.MimeType)
 			continue
 		}
 
@@ -103,12 +108,14 @@ func (s *Session) forwardToApprise(records []*Record, raw []byte) {
 		data, err := json.Marshal(payload)
 		if err != nil {
 			logger.Errorf("JSON marshal error: %v", err)
+			lastErr = err
 			continue
 		}
 
 		url := fmt.Sprintf("%s/%s", s.bkd.AppriseURL, rec.Key)
 		s.bkd.Dispatcher.Enqueue(url, data, rec)
 	}
+	return lastErr
 }
 
 func postWithRetry(url string, data []byte, maxAttempts int) error {

@@ -2,6 +2,7 @@ package internal
 
 import (
 	"database/sql"
+	"sync"
 
 	"github.com/fraddy91/smtp-to-apprise/logger"
 )
@@ -11,8 +12,11 @@ type Backend struct {
 	AppriseURL string
 	Dispatcher *Dispatcher
 }
+
 type Dispatcher struct {
-	queue chan *dispatchJob
+	queue   chan *dispatchJob
+	wg      sync.WaitGroup
+	closing chan struct{}
 }
 
 type dispatchJob struct {
@@ -41,10 +45,21 @@ func (d *Dispatcher) worker() {
 	}
 }
 
+// Enqueue tries to add a job, drops if queue is full or closing
 func (d *Dispatcher) Enqueue(url string, data []byte, rec *Record) {
 	select {
+	case <-d.closing:
+		logger.Warnf("Dispatcher closing, dropping message for %s/%s", rec.Email, rec.Key)
 	case d.queue <- &dispatchJob{url, data, rec}:
+		// enqueued
 	default:
 		logger.Warnf("Queue full, dropping message for %s/%s", rec.Email, rec.Key)
 	}
+}
+
+// Close signals shutdown, closes the queue, and waits for worker to finish
+func (d *Dispatcher) Close() {
+	close(d.closing) // signal no more enqueue
+	close(d.queue)   // close channel so worker drains
+	d.wg.Wait()      // wait until worker finishes
 }
