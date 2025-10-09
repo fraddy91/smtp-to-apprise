@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fraddy91/smtp-to-apprise/logger"
+	"github.com/fraddy91/smtprise/logger"
 
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"

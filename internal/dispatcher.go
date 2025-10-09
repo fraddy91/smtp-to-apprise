@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"sync"
 
-	"github.com/fraddy91/smtp-to-apprise/logger"
+	"github.com/fraddy91/smtprise/logger"
 )
 
 type Backend struct {

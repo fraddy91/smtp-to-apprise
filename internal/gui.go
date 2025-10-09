@@ -5,7 +5,7 @@ import (
 	"html/template"
 	"net/http"
 
-	"github.com/fraddy91/smtp-to-apprise/logger"
+	"github.com/fraddy91/smtprise/logger"
 	"github.com/gin-gonic/gin"
 )
 

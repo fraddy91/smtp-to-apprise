@@ -1,9 +1,13 @@
-[![Go Report Card](https://goreportcard.com/badge/github.com/fraddy91/smtp-to-apprise)](https://goreportcard.com/report/github.com/fraddy91/smtp-to-apprise)
-[![GitHub Release](https://img.shields.io/github/v/release/fraddy91/smtp-to-apprise?logo=github)](https://github.com/fraddy91/smtp-to-apprise)
-[![Docker Image Version](https://img.shields.io/docker/v/fraddy/smtp-to-apprise?logo=docker)](https://hub.docker.com/r/fraddy/smtp-to-apprise/tags)
-[![Docker Image Size](https://img.shields.io/docker/image-size/fraddy/smtp-to-apprise?logo=docker)](https://hub.docker.com/r/fraddy/smtp-to-apprise/tags)
+[![Go Report Card](https://goreportcard.com/badge/github.com/fraddy91/smtprise)](https://goreportcard.com/report/github.com/fraddy91/smtprise)
+[![GitHub Release](https://img.shields.io/github/v/release/fraddy91/smtprise?logo=github)](https://github.com/fraddy91/smtprise)
+[![Docker Image Version](https://img.shields.io/docker/v/fraddy/smtprise?logo=docker)](https://hub.docker.com/r/fraddy/smtprise/tags)
+[![Docker Image Size](https://img.shields.io/docker/image-size/fraddy/smtprise?logo=docker)](https://hub.docker.com/r/fraddy/smtprise/tags)
 
-# Smtp-to-apprise overview
+<p align="center">
+  <img src="assets/logo.png" alt="Smtprise Logo" width="300"/>
+</p>
+
+# Smtprise overview
 A minimal SMTP bridge that receives emails, selects the requested MIME part, and forwards it to Apprise destinations using configurable tags and keys. Written on Go memory footprint is as little as 3mb. It’s built for auditability, abuse resistance, and operational clarity: explicit SMTP auth, async dispatch with retries, and an admin GUI to manage mappings.
 <br>It was inspired by Authelia's lack of notification providers, so the available mail provider was taken as the base to have a notification freedom, so you may redirect notifications to any/multiple destinations you want. This service can be used as notification bridge for any SMTP notifier. It can separate multipart/MIME messages by parts and forwatd it to the Apprise endpoind according to configuration (currently text/plain, text/htmp and raw message can be chosen, accordint to Authelia's standard notification template). So you can easily configure forwarding raw message to your email, text message to any messenger.
 
@@ -21,7 +25,7 @@ A minimal SMTP bridge that receives emails, selects the requested MIME part, and
 - Dispatcher: Background worker(s) that POST payloads to Apprise with retry and backoff.
 - Admin GUI: HTTP server for CRUD on records and operational feedback.
 flowchart LR
-    <br>SMTP[SMTP Client] -->|AUTH + DATA| Bridge[SMTP-to-Apprise]
+    <br>SMTP[SMTP Client] -->|AUTH + DATA| Bridge[Smtprise]
     <br>Bridge -->|extract MIME| Dispatcher[Async Dispatcher]
     <br>Dispatcher -->|POST w/ retry| Apprise[Apprise Services]
     <br>Admin[Admin GUI] -->|CRUD| BackendDB[(DB)]
@@ -31,8 +35,8 @@ flowchart LR
 ### Service setup
 ```yaml
 services:
-  smtp-proxy:
-    image: fraddy/smtp-to-apprise
+  smtprise:
+    image: fraddy/smtprise
     ports:
       - "8231:8080" # GUI
     environment:
@@ -60,7 +64,7 @@ Open http://server.local:8231
 ```yaml
 notifier:
   smtp:
-    address: smtp://shim-proxy:25
+    address: smtp://smtprise:25
     username: 'admin'
     password: 'strongpassword'
     sender: "Authelia <authelia@example.com>"
@@ -114,7 +118,7 @@ Gui contains input form with:
 ## Build
 ### Quick start
 Binary
-- Build: go build -o smtp-to-apprise ./cmd
+- Build: go build -o smtprise ./cmd
 - Run: Place the binary beside your data/ directory or let the app create it.
 
 </br>export ADMIN_USER="admin"

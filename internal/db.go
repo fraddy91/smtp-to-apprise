@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/fraddy91/smtp-to-apprise/logger"
+	"github.com/fraddy91/smtprise/logger"
 )
 
 func InitDB(path string) *sql.DB {

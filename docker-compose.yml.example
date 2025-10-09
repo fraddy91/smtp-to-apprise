@@ -1,6 +1,6 @@
 services:
-  smtp-proxy:
-    image: fraddy/smtp-to-apprise
+  smtprise:
+    image: fraddy/smtprise
     ports:
       - "8231:8080" # GUI
     environment:

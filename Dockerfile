@@ -4,7 +4,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -o shim ./cmd/smtp-to-apprise/main.go
+RUN go build -o shim ./cmd/smtprise/main.go
 
 FROM alpine:latest
 WORKDIR /app

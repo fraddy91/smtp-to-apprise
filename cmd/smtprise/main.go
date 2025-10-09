@@ -9,13 +9,13 @@ import (
 	"syscall"
 
 	"github.com/emersion/go-smtp"
-	"github.com/fraddy91/smtp-to-apprise/internal"
-	"github.com/fraddy91/smtp-to-apprise/logger"
+	"github.com/fraddy91/smtprise/internal"
+	"github.com/fraddy91/smtprise/logger"
 	_ "modernc.org/sqlite"
 )
 
 func main() {
-	logger.Infof("Starting smtp-to-apprise")
+	logger.Infof("Starting smtprise")
 
 	// Prepare data directory
 	dataDir, err := ensureDataDir("data", "0775")

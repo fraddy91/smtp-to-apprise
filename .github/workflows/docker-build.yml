@@ -24,7 +24,7 @@
             id: meta
             uses: docker/metadata-action@v5
             with:
-              images: fraddy/smtp-to-apprise
+              images: fraddy/smtprise
 
           - name: Build and push
             uses: docker/build-push-action@v5

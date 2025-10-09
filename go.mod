@@ -1,4 +1,4 @@
-module github.com/fraddy91/smtp-to-apprise
+module github.com/fraddy91/smtprise
 
 go 1.25.1
 

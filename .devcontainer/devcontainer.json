@@ -1,5 +1,5 @@
 {
-  "name": "Go SMTP-to-Apprise proxy app",
+  "name": "Go Smtprise Relay app",
   "dockerComposeFile": "../docker-compose.yml",
   "service": "shim",
   "workspaceFolder": "/app",
